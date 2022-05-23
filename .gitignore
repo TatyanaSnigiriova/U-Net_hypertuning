@@ -1,0 +1,11 @@
+__pycache__
+checkpoints/*
+part1_train_unet2d/batch_norm_before_relu_batch4/*
+part1_train_unet2d/evaluate/*
+part1_train_unet2d/final/*
+part1_train_unet2d/transpose_conv/*
+part1_train_unet2d/upsample_conv/*
+test_slice.py
+time.py
+params.txt
+stackover
