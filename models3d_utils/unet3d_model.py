@@ -62,9 +62,9 @@ def conv3d_block(
         # Слои имеют разную размерность, поэтому приводим к одной
         inputs = Conv3D(
             filters=n_filters,
-            kernel_size=(1, 1),
+            kernel_size=(1, 1, 1),
             kernel_initializer=tf.keras.initializers.HeNormal(seed=init_seed),
-            strides=(1, 1),
+            strides=(1, 1, 1),
             padding='same',
             use_bias=False,
             activation=None,
@@ -181,28 +181,28 @@ def UNet3D(
         n_filters=n_filters * 1,
         **general_conv3d_block_kwargs
     )
-    pool1 = MaxPooling3D(pool_size=(2, 2))(conv1)
+    pool1 = MaxPooling3D(pool_size=(2, 2, 2))(conv1)
 
     conv2 = conv3d_block(
         pool1,
         n_filters=n_filters * 2,
         **general_conv3d_block_kwargs
     )
-    pool2 = MaxPooling3D(pool_size=(2, 2))(conv2)
+    pool2 = MaxPooling3D(pool_size=(2, 2, 2))(conv2)
 
     conv3 = conv3d_block(
         pool2,
         n_filters=n_filters * 4,
         **general_conv3d_block_kwargs
     )
-    pool3 = MaxPooling3D(pool_size=(2, 2))(conv3)
+    pool3 = MaxPooling3D(pool_size=(2, 2, 2))(conv3)
 
     conv4 = conv3d_block(
         pool3,
         n_filters=n_filters * 8,
         **general_conv3d_block_kwargs
     )
-    pool4 = MaxPooling3D(pool_size=(2, 2))(conv4)
+    pool4 = MaxPooling3D(pool_size=(2, 2, 2))(conv4)
 
     conv5 = conv3d_block(
         pool4,
@@ -217,7 +217,7 @@ def UNet3D(
             **general_pretrained_decode3d_block_kwargs
         )
 
-        merge6_ = Concatenate(axis=3)([conv4, up6_])
+        merge6_ = Concatenate(axis=4)([conv4, up6_])
         conv6_ = conv3d_block(
             merge6_,
             n_filters=n_filters * 8,
@@ -229,7 +229,7 @@ def UNet3D(
             **general_pretrained_decode3d_block_kwargs
         )
 
-        merge7_ = Concatenate(axis=3)([conv3, up7_])
+        merge7_ = Concatenate(axis=4)([conv3, up7_])
         conv7_ = conv3d_block(
             merge7_,
             n_filters=n_filters * 4,
@@ -241,7 +241,7 @@ def UNet3D(
             **general_pretrained_decode3d_block_kwargs
         )
 
-        merge8_ = Concatenate(axis=3)([conv2, up8_])
+        merge8_ = Concatenate(axis=4)([conv2, up8_])
         conv8_ = conv3d_block(
             merge8_,
             n_filters=n_filters * 2,
@@ -253,18 +253,18 @@ def UNet3D(
             **general_pretrained_decode3d_block_kwargs
         )
 
-        merge9_ = Concatenate(axis=3)([conv1, up9_])
+        merge9_ = Concatenate(axis=4)([conv1, up9_])
         conv9_ = conv3d_block(
             merge9_, n_filters * 1,
             **general_conv3d_block_kwargs
         )
         conv10_ = Conv3D(
             filters=1,
-            kernel_size=(1, 1),
-            strides=(1, 1),
+            kernel_size=(1, 1, 1),
+            strides=(1, 1, 1),
             padding='same',
             activation='sigmoid',
-            use_bias=True, # ToDo
+            use_bias=True,  # ToDo
             kernel_initializer=tf.keras.initializers.HeNormal(seed=init_seed),
             bias_initializer='zeros'
         )(conv9_)
@@ -294,7 +294,7 @@ def UNet3D(
         **general_decode3d_block_kwargs
     )
 
-    merge6 = Concatenate(axis=3)([conv4, up6])
+    merge6 = Concatenate(axis=4)([conv4, up6])
     conv6 = conv3d_block(
         merge6,
         n_filters=n_filters * 8,
@@ -306,7 +306,7 @@ def UNet3D(
         **general_decode3d_block_kwargs
     )
 
-    merge7 = Concatenate(axis=3)([conv3, up7])
+    merge7 = Concatenate(axis=4)([conv3, up7])
     conv7 = conv3d_block(
         merge7,
         n_filters=n_filters * 4,
@@ -318,7 +318,7 @@ def UNet3D(
         **general_decode3d_block_kwargs
     )
 
-    merge8 = Concatenate(axis=3)([conv2, up8])
+    merge8 = Concatenate(axis=4)([conv2, up8])
     conv8 = conv3d_block(
         merge8,
         n_filters=n_filters * 2,
@@ -330,7 +330,7 @@ def UNet3D(
         **general_decode3d_block_kwargs
     )
 
-    merge9 = Concatenate(axis=3)([conv1, up9])
+    merge9 = Concatenate(axis=4)([conv1, up9])
     conv9 = conv3d_block(
         merge9,
         n_filters=n_filters * 1,
@@ -338,11 +338,11 @@ def UNet3D(
     )
     conv10 = Conv3D(
         filters=1,
-        kernel_size=(1, 1),
-        strides=(1, 1),
+        kernel_size=(1, 1, 1),
+        strides=(1, 1, 1),
         padding='same',
         activation='sigmoid',
-        use_bias=True, # ToDo
+        use_bias=True,  # ToDo
         kernel_initializer=tf.keras.initializers.HeNormal(seed=init_seed),
         bias_initializer='zeros'
     )(conv9)

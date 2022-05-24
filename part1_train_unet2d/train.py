@@ -314,7 +314,7 @@ if __name__ == '__main__':
     parser.add_argument('-base_upconv_bias', '--base_upconv_bias', default=0, type=int, choices=[0, 1], required=False)
     # -----------------------------------------------------------------------------------------
     # Наборы данных и сохранение результата
-    parser.add_argument('-data_dir', '--data_dir_patch', default=join('..', '..', '..', f'samples1', type=str, required=False))
+    parser.add_argument('-data_dir', '--data_dir_patch', default=join('..', '..', '..', f'samples1'), type=str, required=False)
     parser.add_argument('-train_dir', '--train_dir_name', default='train', type=str, required=False) # ToDo Условие - not None?
     parser.add_argument('-val_dir', '--validate_dir_name', default='validate', type=str, required=False)
     parser.add_argument('-trn_batch', '--train_batch_size', default=16, type=int, required=False)
