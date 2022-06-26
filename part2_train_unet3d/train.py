@@ -12,6 +12,7 @@ import sys, importlib
 from pathlib import Path
 
 
+
 # https://qastack.ru/programming/16981921/relative-imports-in-python-3
 def import_parents(level=1):
     global __package__
@@ -36,10 +37,8 @@ def setup_seed(seed):
     tf.random.set_seed(seed)  # tf cpu fix seed
     os.environ['TF_DETERMINISTIC_OPS'] = '1'  # tf gpu fix seed, please `pip install tensorflow-determinism` first
 
-
 def main(
         device, global_random_seed, init_random_seed,
-        model_obj,
         n_filters, separable_conv, shortcut_connection,
         conv_bias, bn_before_act, decoder_method, upconv_bias,
         pretrained_model_dir, trained_model_dir, epochs, early_loss_val,
@@ -52,7 +51,6 @@ def main(
         f'\n\t\tdevice = {device}',
         f'global_random_seed={global_random_seed}',
         f'init_random_seed={init_random_seed}',
-        f'model_type={model_obj.model_type_name}',
         f'n_filters={n_filters}',
         f'separable_conv={separable_conv}',
         f'shortcut_connection={shortcut_connection}',
@@ -97,19 +95,17 @@ def main(
     )
 
     model_name = get_model_name(
-        model_obj.model_type_name,
-        n_filters, separable_conv, shortcut_connection,
-        conv_bias, bn_before_act, decoder_method, upconv_bias,
-        global_random_seed, init_random_seed
+            n_filters, separable_conv, shortcut_connection,
+            conv_bias, bn_before_act, decoder_method, upconv_bias,
+            global_random_seed, init_random_seed
     )
     print(model_name)
 
     pretrained_model_path = None
     if pretrained_model_dir:
-        if isdir(pretrained_model_dir):
+        if not isdir(pretrained_model_dir):
             if retrain_decoder:
                 base_model_name = get_model_name(
-                    model_obj.model_type_name,
                     n_filters, separable_conv, shortcut_connection,
                     conv_bias, bn_before_act, base_decoder, base_upconv_bias,
                     global_random_seed, init_random_seed
@@ -120,27 +116,24 @@ def main(
         else:
             pretrained_model_path = pretrained_model_dir
 
-    print("pretrained_model_path")
-    print(pretrained_model_path)
     loss = 'binary_crossentropy'
     metrics = [BinaryMeanIOU(2, name=None, dtype=None)]
-    lr = 1e-4  # Максимальная скорость, пока loss не достигнет значения early_loss
+    lr = 1e-4 # Максимальная скорость, пока loss не достигнет значения early_loss
     # Затем максимальная скорость будет понижена до lr = 1e-5
     print("\n-------------------------------------------")
     print(f"Train full model with Adam lr = {lr} for {epochs} epochs")
     optimizer = Adam(lr=lr, beta_1=0.9, beta_2=0.999, epsilon=1e-07)
 
-    model = model_obj(
-        input_size=(512, 512, 1),
-        deep=5, n_filters=n_filters, init_seed=init_random_seed,
-        separable_conv=separable_conv, shortcut_connection=shortcut_connection,
+    model = UNet3D(
+        optimizer=optimizer, loss=loss, metrics=metrics,
+        retrain_decoder=retrain_decoder,
+        pretrained_weights=pretrained_model_dir,
+        input_size=(512, 512, 512, 1), n_filters=n_filters,
+        shortcut_connection=shortcut_connection,
         bn_before_act=bn_before_act, use_conv_bias=conv_bias,
         decoder_method=decoder_method, use_upconv_bias=upconv_bias,
-        retrain_decoder=retrain_decoder,
-        pretrained_weights=pretrained_model_path,
         pretrained_decoder_method=base_decoder, pretrained_use_upconv_bias=base_upconv_bias,
-        optimizer=optimizer, loss=loss, metrics=metrics,
-        custom_obj_dict={"BinaryMeanIOU": BinaryMeanIOU},
+        init_seed=init_random_seed
     )
     model.summary()
     print("(LOG) Model count params:", model.count_params())
@@ -148,23 +141,20 @@ def main(
     if retrain_decoder:
         print("\n-------------------------------------------")
         print(f"Train decoder part by {epochs // 3} epochs with Adam lr = 1e-4")
-        model.freeze_encoder()
-        if not exists(join(history_dir_path, 'retrained_decoder')):
-            os.mkdir(join(history_dir_path, 'retrained_decoder'))
+        freezeEncoder(model, bn_before_act=bn_before_act)
 
         callbacks = [
-            ModelCheckpoint(
-                join(trained_model_dir, 'retrained_decoder', f'{model_name}.hdf5'),
-                monitor='val_loss', verbose=1,
+            ModelCheckpoint(join(
+                trained_model_dir, 'retrained_decoder', f'{model_name}.hdf5'), monitor='val_loss', verbose=1,
                 save_best_only=True, mode='min'
             )
         ]
         if device == 'gpu':
             history = model.fit(
                 x=train_gene,
-                steps_per_epoch=304 // train_batch_size // 5,
+                steps_per_epoch=304 // train_batch_size,
                 validation_data=validate_gene,
-                validation_steps=140 // validate_batch_size // 5,
+                validation_steps=140 // validate_batch_size,
                 epochs=epochs // 3,
                 shuffle=True,
                 verbose=1,
@@ -175,9 +165,9 @@ def main(
         else:
             history = model.fit(
                 x=train_gene,
-                steps_per_epoch=304 // train_batch_size // 5,
+                steps_per_epoch=304 // train_batch_size,
                 validation_data=validate_gene,
-                validation_steps=140 // validate_batch_size // 5,
+                validation_steps=140 // validate_batch_size,
                 epochs=epochs // 3,
                 shuffle=True,
                 verbose=1,
@@ -192,7 +182,7 @@ def main(
                 join(history_dir_path, "retrained_decoder"), global_random_seed,
                 init_random_seed
             )
-        model.unfreeze_encoder()
+        unfreezeEncoder(model, bn_before_act=bn_before_act)
         epochs -= epochs // 3
 
     if epochs > 0:
@@ -201,15 +191,12 @@ def main(
                             save_best_only=True, mode='min'),
             EarlyStoppingByLossVal(monitor='val_loss', value=early_loss_val, verbose=1),
         ]
-        # ToDo - Было замечено, что при дообучении, после первой итерации, модель делает большой шаг обновления
-        # весов и значения потерь и метрик резко ухудшаются к значениям, худшим, чем при случайной инициализации.
-        # Т.е. дообучение сейчас не работает
         if device == 'gpu':
             history = model.fit(
                 x=train_gene,
-                steps_per_epoch=304 // train_batch_size // 5,
+                steps_per_epoch=304 // train_batch_size,
                 validation_data=validate_gene,
-                validation_steps=140 // validate_batch_size // 5,
+                validation_steps=140 // validate_batch_size,
                 epochs=epochs,
                 shuffle=True,
                 verbose=1,
@@ -220,9 +207,9 @@ def main(
         else:
             history = model.fit(
                 x=train_gene,
-                steps_per_epoch=304 // train_batch_size // 5,
+                steps_per_epoch=304 // train_batch_size,
                 validation_data=validate_gene,
-                validation_steps=140 // validate_batch_size // 5,
+                validation_steps=140 // validate_batch_size,
                 epochs=epochs,
                 shuffle=True,
                 verbose=1,
@@ -242,19 +229,19 @@ def main(
         initial_epoch = len(history.history["loss"])
         print(f"Train full model with Adam lr = {lr / 10} for {epochs - initial_epoch} epochs")
         if epochs - initial_epoch > 0:
-            K.set_value(model.get_optimizer().learning_rate, lr / 10)
+            K.set_value(model.optimizer.learning_rate, lr / 10)
             callbacks = [
-                ModelCheckpoint(join(trained_model_dir, f'{model_name}'), monitor='val_loss', verbose=1,
-                                save_best_only=True, mode='min', save_weights_only=False),
+                ModelCheckpoint(join(trained_model_dir, f'{model_name}.hdf5'), monitor='val_loss', verbose=1,
+                                save_best_only=True, mode='min'),
                 EarlyStopping(monitor='val_loss', verbose=1, patience=20),
             ]
 
             if device == 'gpu':
                 history = model.fit(
                     x=train_gene,
-                    steps_per_epoch=304 // train_batch_size // 5,
+                    steps_per_epoch=304 // train_batch_size,
                     validation_data=validate_gene,
-                    validation_steps=140 // validate_batch_size // 5,
+                    validation_steps=140 // validate_batch_size,
                     epochs=epochs,
                     shuffle=True,
                     verbose=1,
@@ -265,9 +252,9 @@ def main(
             else:
                 history = model.fit(
                     x=train_gene,
-                    steps_per_epoch=304 // train_batch_size // 5,
+                    steps_per_epoch=304 // train_batch_size,
                     validation_data=validate_gene,
-                    validation_steps=140 // validate_batch_size // 5,
+                    validation_steps=140 // validate_batch_size,
                     epochs=epochs,
                     shuffle=True,
                     verbose=1,
@@ -289,9 +276,8 @@ if __name__ == '__main__':
     import_parents(level=1)
     import_parents(level=2)
     from ..decoder_methods import *
-
-    build_deconv_methods(case2d=True)  # Теперь доступные методы декодирования перечислены в списке DECODER_METHODS
-    # print(f"LOG: DECODER METHODS for 2D-models: {DECODER_METHODS}")
+    build_deconv_methods(case2d=False) # Теперь доступные методы декодирования перечислены в списке DECODER_METHODS
+    # print(f"LOG: DECODER METHODS for 3D-models: {DECODER_METHODS}")
     parser = argparse.ArgumentParser()
     # -----------------------------------------------------------------------------------------
     # Настройка окружения и инициализации обучаемых параметров
@@ -299,7 +285,6 @@ if __name__ == '__main__':
     parser.add_argument('-global_r_s', '--global_random_seed', default=156, type=int, required=False)
     parser.add_argument('-init_r_s', '--init_random_seed', default=75, type=int, required=False)
     # -----------------------------------------------------------------------------------------
-    parser.add_argument('-model', '--model_type', default="unet", type=str, required=False)
     # Параметры гипернастройки
     parser.add_argument('-n_f', '--n_filters', type=int, required=True)
     parser.add_argument('-sep_conv', '--separable_conv', default=0, type=int, choices=[0, 1], required=False)
@@ -329,10 +314,8 @@ if __name__ == '__main__':
     parser.add_argument('-base_upconv_bias', '--base_upconv_bias', default=0, type=int, choices=[0, 1], required=False)
     # -----------------------------------------------------------------------------------------
     # Наборы данных и сохранение результата
-    parser.add_argument('-data_dir', '--data_dir_patch', default=join('..', '..', f'samples1'), type=str,
-                        required=False)
-    parser.add_argument('-train_dir', '--train_dir_name', default='train', type=str,
-                        required=False)  # ToDo Условие - not None?
+    parser.add_argument('-data_dir', '--data_dir_patch', default=join('..', '..', '..', f'samples1'), type=str, required=False)
+    parser.add_argument('-train_dir', '--train_dir_name', default='train', type=str, required=False) # ToDo Условие - not None?
     parser.add_argument('-val_dir', '--validate_dir_name', default='validate', type=str, required=False)
     parser.add_argument('-trn_batch', '--train_batch_size', default=16, type=int, required=False)
     parser.add_argument('-val_batch', '--validate_batch_size', default=10, type=int, required=False)
@@ -341,11 +324,6 @@ if __name__ == '__main__':
     parser.add_argument('-history_dir', '--history_dir_path', default=join('.', 'histories'), type=str, required=False)
 
     args = parser.parse_args()
-
-    model_type = args.model_type.lower()
-    assert model_type in ["unet", "segnet"], \
-        f"Error for the model {model_type}: Only the 'unet' or 'segnet' network type is supported"
-
     if args.cpu:
         device = 'cpu'
     else:
@@ -390,20 +368,12 @@ if __name__ == '__main__':
     from tensorflow.keras.optimizers import Adam
     from tensorflow.keras.callbacks import ModelCheckpoint
     from tensorflow.keras.callbacks import EarlyStopping
-
-    if model_type == "unet":
-        from ..models2d.unet2d_model import *
-
-        model_obj = UNet2D
-    else:
-        from ..models2d.segnet2d_model import *
-
-        model_obj = SegNet2D
-
+    from ..models2d_utils.unet2d_model import *
     from ..models2d_utils.generator2d import *
     from ..models_utils.make_history import *
     from ..models_utils.metrics import *
     from ..models_utils.utils import *
+    from ..models3d_utils.unet3d_model import UNet3D
     from tensorflow.keras import backend as K
 
     if not exists(args.trained_model_dir):
@@ -419,11 +389,10 @@ if __name__ == '__main__':
     if not exists(args.history_dir_path):
         makedirs(args.history_dir_path)
 
-    # ToDo - mkdir retrained_decoder
+    #ToDo - mkdir retrained_decoder
 
     main(
         device, args.global_random_seed, args.init_random_seed,
-        model_obj,
         args.n_filters, args.separable_conv, args.shortcut_connection,
         args.conv_bias, args.bn_before_act, args.decoder, args.upconv_bias,
         args.pretrained_model_dir, args.trained_model_dir, args.epochs, args.early_loss,

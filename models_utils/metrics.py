@@ -19,6 +19,17 @@ class BinaryMeanIOU_(MeanIoU):  # Только для версии 2.6, в ве�
         y_pred = tf.where(condition=tf.math.greater(y_pred, self.threshold), x=1.0, y=0.0)
         return super().update_state(y_true, y_pred, sample_weight)
 
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            'threshold': self.threshold,
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
 
 class TryBinaryMeanIOU2D(MeanIoU):
     def __init__(self, num_classes, name=None, dtype=None, threshold=0.5):
@@ -79,6 +90,17 @@ class TryBinaryMeanIOU2D(MeanIoU):
         print("result by volumes:", f"{np.mean(vals_by_batch_volumes):.16f}")
         print("result by imgs in volumes:", f"{np.mean(vals_by_batch_volumes_):.16f}")
 
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            'threshold': self.threshold,
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)
+
 
 class BinaryLoss(BinaryCrossentropy):
     def __init__(
@@ -102,4 +124,13 @@ class BinaryLoss(BinaryCrossentropy):
         y_pred = tf.where(condition=tf.math.greater(y_pred, self.threshold), x=1.0, y=0.0)
         return super().update_state(y_true, y_pred, sample_weight)
 
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            'threshold': self.threshold,
+        })
+        return config
 
+    @classmethod
+    def from_config(cls, config):
+        return cls(**config)

@@ -3,29 +3,21 @@ import warnings
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-def freezeEncoder(
-        model_,
-        bn_before_act=False,
+
+def get_model_name(
+        model_name,
+        n_filters, separable_conv, shortcut_connection,
+        conv_bias, bn_before_act, decoder_method, upconv_bias,
+        global_random_seed, init_random_seed
 ):
-    step = 6 if bn_before_act else 4
-    for i in range(step * 5 + 5):
-        model_.layers[i].trainable = False
-
-    # model = Model(inputs=model_.layers[0].input, outputs=model_.layers[-1].output)
-    print([layer.trainable for layer in model_.layers])
-    # return model
-
-
-def unfreezeEncoder(
-        model_,
-        bn_before_act=False,
-):
-    step = 6 if bn_before_act else 4
-    for i in range(step * 5 + 5):
-        model_.layers[i].trainable = True
-    # model = Model(inputs=model_.layers[0].input, outputs=model_.layers[-1].output)
-    print([layer.trainable for layer in model_.layers])
-    # return model
+    return f'{model_name}__{n_filters}nf_' \
+           f'{"sepConv_" if separable_conv else ""}' \
+           f'{"shortCon_" if shortcut_connection else ""}' \
+           "relu_" \
+           f'{"convBias_" if conv_bias else "bnBeforeAct_" if bn_before_act else ""}' \
+           f'{decoder_method}_' \
+           f'{"upconv_bias" if upconv_bias else ""}' \
+           f'__BCE_loss__{global_random_seed}grs_{init_random_seed}irs'
 
 
 class EarlyStoppingByLossVal(Callback):

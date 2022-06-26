@@ -1,9 +1,11 @@
 DECODER_METHODS = []
 UPSCALE_METHODS = ['nearest', 'bilinear', 'subpixel', 'subpixel2', 'subpixel4']
 
+
 def build_deconv_methods(case2d=True):
     UPSCALE_METHODS2D = UPSCALE_METHODS
-    UPSCALE_METHODS3D = [method for method in UPSCALE_METHODS if method not in ['bilinear', 'subpixel', 'subpixel2', 'subpixel4']]
+    UPSCALE_METHODS3D = [method for method in UPSCALE_METHODS if
+                         method not in ['bilinear', 'subpixel', 'subpixel2', 'subpixel4']]
 
     for method in UPSCALE_METHODS2D if case2d else UPSCALE_METHODS3D:
         DECODER_METHODS.extend(list(map(

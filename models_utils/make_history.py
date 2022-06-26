@@ -8,7 +8,6 @@ def histoty_to_csv(history, epochs, tuned_hyper_pattern,
                    history_dir_path, global_random_seed,
                    init_random_seed,
                    initial_epoch=0):
-
     keys = dict()
     for key in history.history.keys():
         if key[-1].isdigit():
@@ -16,7 +15,6 @@ def histoty_to_csv(history, epochs, tuned_hyper_pattern,
         else:
             keys[key] = key
     print(keys)
-
 
     y_loss = np.array(history.history[keys["loss"]])[None, :]
     y_val_loss = np.array(history.history[keys["val_loss"]])[None, :]
